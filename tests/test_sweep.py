@@ -227,6 +227,43 @@ class TestViewScoping(SweptCorpus):
         )
 
 
+class TestDeclaredTypes(unittest.TestCase):
+    """The reader side of rule 3, asserted where this repo controls it.
+
+    The generated views declare every column instead of letting the reader infer it.
+    That is stronger than sample_size=-1 and, unlike it, does not depend on how DuckDB
+    buffers a file it is sampling.
+
+    There is no test here asserting that read_json_auto's default *mis*types a long
+    file. It does -- see the note in the README, reproduced on a 379 MiB block table
+    where twelve columns came back JSON and `where box_y0 > 700` quietly returned a
+    different count. But the trigger is DuckDB's internal buffering, not the row count,
+    and a test that asserts another project's sampling stays wrong is a flaky test
+    pointed at someone else's implementation detail.
+    """
+
+    def test_every_column_is_declared_with_its_type(self):
+        for table, columns in schema.TABLES.items():
+            clause = schema.columns_clause(table)
+            for name, dtype in columns.items():
+                self.assertIn("'{}': '{}'".format(name, dtype), clause)
+
+    def test_the_numeric_block_columns_are_not_left_to_inference(self):
+        clause = schema.columns_clause("block")
+        for name in ("box_x0", "box_y0", "box_x1", "box_y1"):
+            self.assertIn("'{}': 'DOUBLE'".format(name), clause)
+        for name in ("char_start", "char_end", "byte_start", "byte_end", "part_index"):
+            self.assertIn("'{}': 'BIGINT'".format(name), clause)
+
+    def test_the_views_never_call_the_inferring_reader(self):
+        statements = " ".join(
+            line for line in schema.views_sql().splitlines()
+            if not line.lstrip().startswith("--")
+        )
+        self.assertIn("read_json(", statements)
+        self.assertNotIn("read_json_auto", statements)
+
+
 class TestRuleFour(SweptCorpus):
     """No column whose name claims more than the backend can see."""
 

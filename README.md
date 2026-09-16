@@ -137,10 +137,13 @@ a real answer meaning the backend opened the file and found no text; `block_coun
 means nobody knows. Collapsing the two makes every average wrong.
 
 **3. The reader types its columns from every row, not from a sample.**
-`read_json_auto` samples the head of a file. The head of a sweep is mostly successes, so
-`error_kind` gets typed from nulls and the refusal rows disappear on the reader's side —
-the rows rule 1 exists to keep. Pass `sample_size=-1`, or use the generated views, which
-pass an explicit column map and infer nothing at all.
+`read_json_auto` infers each column's type from a sample, and the head of a sweep does not
+represent the file: it is whatever sorted first. Measured on this build, a block table
+whose first rows were docx blocks typed all twelve coordinate columns as `JSON`, because
+docx blocks have no coordinates. Arithmetic on them then failed outright, and a
+comparison quietly returned the wrong count. Pass `sample_size=-1`, or use the generated
+views, which declare every column and infer nothing at all. The numbers are under
+[Measured on this build](#what-a-sweep-finds).
 
 **4. No column whose name claims more than the backend can see.**
 A column named `tagged` reads in SQL as "a screen reader can read this" and means, at
@@ -247,6 +250,29 @@ Three numbers from the same sweep that only exist because of rules 1 and 2:
   list generated from `page_count`, because a page with no text has no rows in `block`:
   join the two tables and the pages you are looking for are exactly the ones the join
   drops. See [queries/04_pages_without_text.sql](queries/04_pages_without_text.sql).
+- **Rule 3 is not theoretical, and it bites on the block table rather than the document
+  table.** Reading this corpus's 379 MiB, 821,026-row `block.jsonl` with
+  `read_json_auto` and its default sampling, twelve columns came back typed `JSON`
+  instead of `DOUBLE` or `BIGINT` — every coordinate column, which is what the block
+  table is for. The head of that file is docx blocks, and docx blocks have no
+  coordinates. Two queries over it:
+
+  | Query | Default sampling | `sample_size=-1` |
+  |---|---|---|
+  | `avg(char_end - char_start)` | Binder Error, no result | 30.21 |
+  | `count(*) where box_y0 > 700` | 38,247 | 38,497 |
+
+  The first is the good case: it fails loudly. The second is the one worth the rule — it
+  runs, returns a number, and the number is wrong by 250 rows. The generated views avoid
+  both by declaring every column instead of inferring any.
+
+  The document table for the same sweep typed correctly either way, at 11,743 rows. Which
+  is the honest shape of the hazard: it does not appear on a small sweep, so it is easy to
+  conclude the rule is unnecessary right up until the corpus grows. The trigger is
+  DuckDB's buffering rather than a row count, so there is no unit test here asserting the
+  mistyping — the repo tests its own side, that the views declare types and never call
+  the inferring reader.
+
 - **Average PDF pages: 5.31 over the files that opened, 5.26 over the corpus.** A 1%
   difference, from a 0.89% refusal rate, on a corpus where the refusals are small files.
   It is small here and it is not always small, and the only reason it can be checked at

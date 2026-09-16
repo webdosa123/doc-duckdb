@@ -47,10 +47,19 @@ file and found no text. Those two states have to stay distinguishable, because
 `avg(block_count)` over a corpus is wrong the moment they are not.
 
 **3. The reader types its columns from every row, not from a sample.**
-`read_json_auto` samples the head of the file by default. The head of a sweep is usually
-successes, so `error_kind` types from nulls and the refusal rows — the rows rule 1 exists
-to keep — drop back out on the reader's side. Use `sample_size=-1`, or better, pass the
-explicit `columns=` map this repo generates. The generated views in `docduckdb/sql/`
+`read_json_auto` infers each column's type from a sample, and the head of a sweep does not
+represent the file — it is whatever sorted first. Measured here: a block table whose first
+rows were docx blocks typed all twelve coordinate columns as `JSON`, because docx blocks
+have no coordinates. `avg(char_end - char_start)` then raised a binder error, and
+`count(*) where box_y0 > 700` silently returned 38,247 against a true 38,497.
+
+Note what did *not* happen, because the guessed version of this rule is easy to repeat and
+wrong: `error_kind` on the document table typed correctly, and no refusal row was lost.
+At 11,743 rows that file was inside the sample window. The hazard is real and it lands on
+the block table first, because a block table passes the window after a few hundred
+documents. Do not restate the rule as "the refusals disappear" without measuring it.
+
+Use `sample_size=-1`, or better, pass the explicit `columns=` map this repo generates. The generated views in `docduckdb/sql/`
 use the explicit map, which is strictly stronger than the sample rule: no inference at
 all. Hand-written queries in `queries/` show `sample_size=-1` because that is what someone
 will type without the repo's help.
