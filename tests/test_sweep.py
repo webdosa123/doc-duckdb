@@ -407,7 +407,21 @@ class TestSweepRow(SweptCorpus):
         self.assertGreater(self.row["elapsed_s"], 0)
         self.assertGreater(self.row["source_bytes"], 0)
         self.assertGreater(self.row["document_bytes"], 0)
-        self.assertIn("pdf", json.loads(self.row["backends"]))
+        self.assertIn("pdf", self.row["backends"])
+
+    def test_backends_is_a_json_object_a_query_can_reach_into(self):
+        try:
+            import duckdb
+        except ImportError:
+            self.skipTest("duckdb not installed")
+        connection = duckdb.connect(":memory:")
+        glob = str(self.directory.parent).replace("\\", "/") + "/*"
+        connection.execute(schema.views_sql(glob))
+        kind, backend = connection.sql(
+            "select json_type(backends), backends->>'pdf' from sweep limit 1"
+        ).fetchone()
+        self.assertEqual("OBJECT", kind)
+        self.assertIn("pypdfium2", backend)
 
     def test_the_store_size_is_the_file_on_disk(self):
         self.assertEqual(

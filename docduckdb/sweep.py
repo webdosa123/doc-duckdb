@@ -322,7 +322,10 @@ def run(
             "tool_version": __version__,
             "python_version": platform.python_version(),
             "platform": "{} {}".format(platform.system(), platform.machine()),
-            "backends": json.dumps(backends.versions(), ensure_ascii=False),
+            # The dict itself, not a dumped string: the column is declared JSON, and a
+            # JSON string holding JSON reads back as VARCHAR, so `backends->>'pdf'`
+            # quietly returns null instead of the version it names.
+            "backends": backends.versions(),
         }
     )
     writer.write("sweep", sweep_row)

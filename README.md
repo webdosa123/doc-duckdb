@@ -56,7 +56,7 @@ $ python -m docduckdb sweep ./corpus --out ./out --label first_touch
 swept 3,214 files in 41.8s — 3,180 ok, 34 failed, 214,884 blocks
 out/20260916T101230Z-4f2a19/
 
-# any SQL, against views built over every sweep in ./out
+# any SQL, against views over the sweep output
 $ python -m docduckdb query "select error_kind, count(*) from document where not ok group by 1 order by 2 desc"
 
 # the built-in summary, if you do not want to type SQL
@@ -64,6 +64,9 @@ $ python -m docduckdb query
 
 # materialise into a real database file, for a tool that wants one
 $ python -m docduckdb load --db corpus.duckdb
+
+# every column, with its type, and the error-kind vocabulary
+$ python -m docduckdb schema
 ```
 
 `--out` accumulates. Each run writes `out/<sweep_id>/{document,block,sweep}.jsonl` and the
@@ -94,12 +97,23 @@ Column-by-column reference, including what each backend cannot see, is in
 [queries/](queries/).
 
 ```sql
--- pages that carry no extractable text, which is the usual signature of a scan
-select d.path, b.part_index
-from document d join block b using (doc_id)
-where d.format = 'pdf'
-group by 1, 2
-having sum(b.char_count) = 0;
+-- PDF pages with no extractable text, the usual signature of a scan.
+-- The page list comes from page_count, not from the blocks: a page with no text has no
+-- block rows, so a join between the two tables drops exactly the pages being looked for.
+with pages as (
+    select doc_id, path, unnest(generate_series(0, page_count - 1)) as page_index
+    from document where format = 'pdf' and ok and page_count > 0
+),
+text_on_page as (
+    select doc_id, part_index, sum(char_count) as chars
+    from block where part_kind = 'page' group by 1, 2
+)
+select p.path, count(*) as pages_without_text
+from pages p
+left join text_on_page t on t.doc_id = p.doc_id and t.part_index = p.page_index
+where coalesce(t.chars, 0) = 0
+group by 1
+order by 2 desc;
 
 -- what refused, and what share of the corpus that is
 select error_kind,
