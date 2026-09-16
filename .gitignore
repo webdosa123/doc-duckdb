@@ -1,0 +1,10 @@
+out/
+*.duckdb
+*.duckdb.wal
+__pycache__/
+*.pyc
+.venv/
+build/
+dist/
+*.egg-info/
+tests/fixtures/
