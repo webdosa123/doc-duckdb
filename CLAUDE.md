@@ -23,7 +23,7 @@ carry: `pypdfium2` (BSD-3 / Apache-2.0) for PDF, `python-docx` / `python-pptx` /
   parser is a number about a different parser, and it does not transfer. If you cannot
   measure it here, do not write it down here.
 - **No hwp / hwpx.** Out of scope by owner ruling, not by licence.
-- **No DuckDB extension.** The per-platform times per-version build matrix is not worth
+- **No DuckDB extension.** A per-platform by per-version build matrix is not worth
   carrying. JSON Lines plus `read_json` is the whole interface.
 - **No local paths, machine names, or account names in the tree.** Examples use `./corpus`
   and `./out`. Sweep output records the root you swept, but sweep output is data and does
@@ -59,10 +59,10 @@ At 11,743 rows that file was inside the sample window. The hazard is real and it
 the block table first, because a block table passes the window after a few hundred
 documents. Do not restate the rule as "the refusals disappear" without measuring it.
 
-Use `sample_size=-1`, or better, pass the explicit `columns=` map this repo generates. The generated views in `docduckdb/sql/`
-use the explicit map, which is strictly stronger than the sample rule: no inference at
-all. Hand-written queries in `queries/` show `sample_size=-1` because that is what someone
-will type without the repo's help.
+Use `sample_size=-1`, or better, pass the explicit `columns=` map this repo generates. The
+generated views in `docduckdb/sql/` use that map, which is strictly stronger than the
+sample rule: no inference at all. Hand-written queries in `queries/` show `sample_size=-1`
+because that is what someone will type without the repo's help.
 
 **4. No column whose name claims more than the backend can see.**
 This is the one that binds hardest, because a stranger querying the table cannot see what
