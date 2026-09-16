@@ -8,8 +8,12 @@ version = "0.1.0"
 description = "Sweep a folder of documents into three tables and ask it in SQL."
 readme = "README.md"
 requires-python = ">=3.10"
-# Not licensed for release. The classifier below is what stops an accidental upload.
-classifiers = ["Private :: Do Not Upload"]
+# Apache-2.0, see LICENSE. The Private classifier below is what stops an accidental
+# PyPI upload: publishing on GitHub and publishing on PyPI are separate decisions.
+classifiers = [
+    "Private :: Do Not Upload",
+    "License :: OSI Approved :: Apache Software License",
+]
 dependencies = [
     "pypdfium2>=4",
     "python-docx>=1.0",

@@ -280,5 +280,6 @@ Three numbers from the same sweep that only exist because of rules 1 and 2:
 
 ## Status
 
-Private. Not released, and not licensed for release. Building it and publishing it are
-separate decisions, and only the second one is hard to undo.
+Early. The schema is at 0.1 and the columns may change.
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

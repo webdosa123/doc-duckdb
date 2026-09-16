@@ -139,5 +139,6 @@ libraries and duckdb.
 
 ## Status
 
-Private. Not released, and not licensed for release. Publishing is a separate decision
-from building, and only publishing is hard to undo.
+Private, and licensed under Apache-2.0 (see `LICENSE`). Publishing is a separate decision
+from building, and only publishing is hard to undo - a licence being in place does not
+mean the repository has been made public.
