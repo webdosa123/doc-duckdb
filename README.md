@@ -53,8 +53,9 @@ Or `pip install -e .` for the `doc-duckdb` command. Python 3.10 or newer.
 ```console
 # sweep a folder; one output directory per run, named by sweep id
 $ python -m docduckdb sweep ./corpus --out ./out --label first_touch
-swept 3,214 files in 41.8s — 3,180 ok, 34 failed, 214,884 blocks
-out/20260916T101230Z-4f2a19/
+swept 11,743 files in 65.0s read + 1.6s walk - 10,475 ok, 1,268 failed, 821,026 blocks
+store 406,015,795 bytes over source 2,016,381,418 bytes = 0.2014x
+out/20260916T023840.716166Z-af95ae
 
 # any SQL, against views over the sweep output
 $ python -m docduckdb query "select error_kind, count(*) from document where not ok group by 1 order by 2 desc"
@@ -171,7 +172,85 @@ itself. They do not model a page, and they do not infer structure from how a pag
 
 ## Measured on this build
 
-<!-- MEASUREMENTS -->
+Numbers from this build, on this machine, with the command lines shown. They are not
+transferable to another parser or another corpus, and nothing measured elsewhere has been
+copied in.
+
+Machine: Windows 11, 20 logical cores, Python 3.10.10, pypdfium2 5.7.0 (pdfium
+148.0.7776.0), python-docx 1.1.2, python-pptx 0.6.23, openpyxl 3.1.5, duckdb 1.0.0.
+
+### Cost
+
+Corpus: 4,005 documents, 881 MiB, on a local disk. 2,943 PDF (865 MiB, 24,888 pages),
+1,046 docx, 16 pptx. All 4,005 parsed; 777,781 blocks.
+
+```console
+$ python -m docduckdb sweep <corpus> --out out --label first_touch
+```
+
+| Run | Workers | Hash + boxes | Walk | Read | Total | Per file | Store / source |
+|---|---|---|---|---|---|---|---|
+| first touch | 1 | yes | 2.6 s | 267.7 s | 270.3 s | 66.9 ms | 0.4236 |
+| repeat | 1 | yes | 1.2 s | 189.3 s | 190.4 s | 47.3 ms | 0.4236 |
+| repeat, `--jobs 8` | 8 | yes | 1.1 s | 76.9 s | 78.0 s | 19.2 ms | 0.4236 |
+| repeat, `--no-hash --no-boxes` | 1 | no | 1.2 s | 133.0 s | 134.2 s | 33.2 ms | 0.3737 |
+
+What these numbers do and do not say:
+
+- **The pair is the measurement, not the first row.** This machine cannot flush the
+  operating system's page cache, so "first touch" means the first read of these files in
+  this session, not a guaranteed cold cache. The gap between the first two rows is 1.41x,
+  and part of that is the cache rather than the work. Quoting either row on its own would
+  be a different and less defensible claim; that is why both are here.
+- **Runs 2 to 4 compare with each other, not with run 1.** All three read a corpus the
+  operating system had already seen.
+- **Eight workers gave 2.5x, not 8x**, on 20 logical cores. The work is a mix of file
+  reading and CPython, and every row is still written by one parent process.
+- **The hash and the boxes together cost 30%** of the warm single-process run and 12%
+  of the store. `content_sha256` reads every byte of every file; the PDF boxes
+  ask pdfium for a rectangle per character. Both are on by default and both have a flag.
+- **The store ratio is a fact about the corpus, not about the tool.** 0.42x here, on
+  text-dense PDFs. On the second corpus below, where half the PDF pages carry no text at
+  all and a third of the bytes are in formats this build does not parse, the same build
+  produced 0.20x.
+
+### What a sweep finds
+
+Second corpus: 11,743 documents, 1,923 MiB. 5,152 PDF, 4,885 docx, 565 pptx, and 1,141
+files in formats this build does not parse. 821,026 blocks, store 0.2014x of source.
+
+```console
+$ python -m docduckdb query -f queries/02_failures.sql
+```
+
+| `error_kind` | Files | Share |
+|---|---|---|
+| (parsed) | 10,475 | 89.20% |
+| `format_not_supported` | 1,141 | 9.72% |
+| `wrong_format` | 90 | 0.77% |
+| `password_required` | 21 | 0.18% |
+| `parse_failed` | 15 | 0.13% |
+| `empty_file` | 1 | 0.01% |
+
+Every one of those 1,268 files is a row. Nine and a half percent of this corpus by count,
+and a third by bytes, is hwp, hwpx, doc and key, which this build does not read. Had those
+been dropped instead of recorded, the sweep would report 10,602 documents of which 98.8%
+parsed, and nothing in the output would say that 1,141 files had been left out.
+
+Three numbers from the same sweep that only exist because of rules 1 and 2:
+
+- **3,937 documents opened and produced no text**, against **1,268 whose block count is
+  unknown**. `block_count = 0` and `block_count = null` are different answers, and here
+  they differ by a factor of three. A schema that wrote `0` for both would report 5,205
+  empty documents, of which 1,268 were never opened.
+- **13,222 of 27,100 PDF pages carry no extractable text.** Finding them needs the page
+  list generated from `page_count`, because a page with no text has no rows in `block`:
+  join the two tables and the pages you are looking for are exactly the ones the join
+  drops. See [queries/04_pages_without_text.sql](queries/04_pages_without_text.sql).
+- **Average PDF pages: 5.31 over the files that opened, 5.26 over the corpus.** A 1%
+  difference, from a 0.89% refusal rate, on a corpus where the refusals are small files.
+  It is small here and it is not always small, and the only reason it can be checked at
+  all is that the refused rows are still in the table.
 
 ## Status
 
